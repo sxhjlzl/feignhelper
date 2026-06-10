@@ -12,6 +12,8 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.editor.markup.GutterIconRenderer
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.psi.NavigatablePsiElement
@@ -65,10 +67,8 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
         val method = UastElementUtils.extractMethodForNameAnchor(element) ?: return null
         if (!isApplicable(method)) return null
 
-        val targets = findTargets(project, method)
+        // 尝试从缓存获取 URL，即使获取失败也显示图标，点击时会触发兜底扫描
         val selfUrl = resolveSelfUrl(project, method)
-        // 即使没有跳转目标，只要能解析出 URL 也展示图标，便于用户右键复制
-        if (targets.isEmpty() && selfUrl.isNullOrEmpty()) return null
 
         val tooltipTitle = FeignHelperBundle.message(titleKey)
         val tooltipHint = FeignHelperBundle.message("linemarker.tooltip.hint")
@@ -85,7 +85,7 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
             accessibleName = FeignHelperBundle.message(accessibleKey),
             project = project,
             titleKey = titleKey,
-            targets = targets,
+            targetProvider = ::findTargets,
             selfUrl = selfUrl,
         )
     }
@@ -102,14 +102,15 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
         private val accessibleName: String,
         private val project: Project,
         private val titleKey: String,
-        private val targets: List<HttpMappingInfo>,
+        private val targetProvider: (Project, PsiMethod) -> List<HttpMappingInfo>,
         private val selfUrl: String?,
     ) : LineMarkerInfo<PsiElement>(
         element,
         element.textRange,
         icon,
         { tooltipText },
-        { event, _ -> navigateToTargets(event, project, targets, titleKey) },
+        // 注意：不能在 LineMarkerInfo 中长期持有 PsiMethod，点击时用最新的锚点元素重新解析方法
+        { event, anchor -> navigateToTargets(event, project, anchor, targetProvider, titleKey) },
         GutterIconRenderer.Alignment.RIGHT,
         { accessibleName },
     ) {
@@ -138,6 +139,19 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
     companion object {
 
         /**
+         * 未找到匹配的对端接口时发送气泡通知，避免点击图标后无任何反馈。
+         */
+        private fun notifyNoTargets(project: Project) {
+            NotificationGroupManager.getInstance()
+                .getNotificationGroup("FeignHelper")
+                .createNotification(
+                    FeignHelperBundle.message("notification.no.targets"),
+                    NotificationType.INFORMATION,
+                )
+                .notify(project)
+        }
+
+        /**
          * 把 URL 写入系统剪贴板并发送一条气泡通知。
          */
         private fun copyUrlAndNotify(project: Project, url: String) {
@@ -155,21 +169,44 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
          * 跳转到对端目标方法。
          * - 单目标：直接 navigate
          * - 多目标：用 PsiTargetNavigator 展示选择 popup
+         *
+         * 查找目标可能触发兜底全量扫描，必须放在可取消的后台进度中执行，避免阻塞 EDT。
          */
         private fun navigateToTargets(
             event: MouseEvent,
             project: Project,
-            targets: List<HttpMappingInfo>,
+            anchor: PsiElement,
+            targetProvider: (Project, PsiMethod) -> List<HttpMappingInfo>,
             titleKey: String,
         ) {
-            if (targets.isEmpty()) return
+            if (!anchor.isValid) return
+            val sourceMethod = UastElementUtils.extractMethodForNameAnchor(anchor) ?: return
+            val targets = try {
+                ProgressManager.getInstance()
+                    .runProcessWithProgressSynchronously<List<HttpMappingInfo>, RuntimeException>(
+                        { targetProvider(project, sourceMethod) },
+                        FeignHelperBundle.message("progress.finding.targets"),
+                        true,
+                        project,
+                    )
+            } catch (e: ProcessCanceledException) {
+                // 用户主动取消查找时静默返回
+                return
+            }
+            if (targets.isEmpty()) {
+                notifyNoTargets(project)
+                return
+            }
             val validTargets = targets
                 .asSequence()
                 .map { it.method }
                 .filter { it.isValid }
                 .filterIsInstance<NavigatablePsiElement>()
                 .toList()
-            if (validTargets.isEmpty()) return
+            if (validTargets.isEmpty()) {
+                notifyNoTargets(project)
+                return
+            }
             if (validTargets.size == 1) {
                 validTargets[0].navigate(true)
                 return

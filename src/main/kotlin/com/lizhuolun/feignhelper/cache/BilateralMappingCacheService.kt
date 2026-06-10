@@ -5,8 +5,9 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
-import com.intellij.util.Alarm
+import com.intellij.openapi.util.Computable
 import com.intellij.psi.PsiMethod
+import com.intellij.util.Alarm
 import com.lizhuolun.feignhelper.core.EndpointKind
 import com.lizhuolun.feignhelper.core.HttpMappingInfo
 import com.lizhuolun.feignhelper.core.annotation.AnnotationParser
@@ -79,7 +80,9 @@ class BilateralMappingCacheService(private val project: Project) {
      * @param method 已失效或被修改的方法
      */
     fun removeByMethod(method: PsiMethod) {
-        val key = HttpMappingInfo.qualifierOf(method)
+        val key = readAction {
+            if (method.isValid) HttpMappingInfo.qualifierOf(method) else null
+        } ?: return
         clientMappings.remove(key)
         controllerMappings.remove(key)
     }
@@ -102,9 +105,37 @@ class BilateralMappingCacheService(private val project: Project) {
      * @return 匹配的 Controller 端映射列表
      */
     fun findControllerTargets(clientMethod: PsiMethod): List<HttpMappingInfo> {
-        val source = computeFreshClientMapping(clientMethod) ?: return emptyList()
+        if (!readAction { clientMethod.isValid }) return emptyList()
+        var source = computeFreshClientMapping(clientMethod)
+
+        // 即时解析失败时回退到缓存条目
+        if (source == null) {
+            val key = readAction { HttpMappingInfo.qualifierOf(clientMethod) }
+            source = clientMappings[key]?.takeIf { it.method.isValid }
+        }
+
+        // 缓存也未命中时兜底全量扫描客户端侧
+        if (source == null) {
+            val scanned = EndpointScanner.scanClientEndpoints(project)
+            if (scanned.isNotEmpty()) {
+                replaceClient(scanned)
+                source = scanned.firstOrNull { it.method == clientMethod }
+            }
+        }
+
+        // 仍然无法获取 source 时返回空列表
+        if (source == null) return emptyList()
+
         upsert(source)
-        return controllerMappings.values.filter { it.matches(source) && it.method.isValid }
+        val targets = controllerMappings.values.filter { it.matches(source) && it.method.isValid }
+        if (targets.isNotEmpty() || controllerMappings.isNotEmpty()) return targets
+
+        val manualProfile = FeignHelperSettings.getInstance().state.manualActiveProfile
+        val scanned = EndpointScanner.scanControllerEndpoints(project, manualProfile)
+        if (scanned.isNotEmpty()) {
+            replaceController(scanned)
+        }
+        return scanned.filter { it.matches(source) && it.method.isValid }
     }
 
     /**
@@ -114,9 +145,37 @@ class BilateralMappingCacheService(private val project: Project) {
      * @return 匹配的客户端映射列表
      */
     fun findClientTargets(controllerMethod: PsiMethod): List<HttpMappingInfo> {
-        val source = computeFreshControllerMapping(controllerMethod) ?: return emptyList()
+        if (!readAction { controllerMethod.isValid }) return emptyList()
+        var source = computeFreshControllerMapping(controllerMethod)
+
+        // 即时解析失败时回退到缓存条目
+        if (source == null) {
+            val key = readAction { HttpMappingInfo.qualifierOf(controllerMethod) }
+            source = controllerMappings[key]?.takeIf { it.method.isValid }
+        }
+
+        // 缓存也未命中时兜底全量扫描 Controller 侧
+        if (source == null) {
+            val manualProfile = FeignHelperSettings.getInstance().state.manualActiveProfile
+            val scanned = EndpointScanner.scanControllerEndpoints(project, manualProfile)
+            if (scanned.isNotEmpty()) {
+                replaceController(scanned)
+                source = scanned.firstOrNull { it.method == controllerMethod }
+            }
+        }
+
+        // 仍然无法获取 source 时返回空列表
+        if (source == null) return emptyList()
+
         upsert(source)
-        return clientMappings.values.filter { it.matches(source) && it.method.isValid }
+        val targets = clientMappings.values.filter { it.matches(source) && it.method.isValid }
+        if (targets.isNotEmpty() || clientMappings.isNotEmpty()) return targets
+
+        val scanned = EndpointScanner.scanClientEndpoints(project)
+        if (scanned.isNotEmpty()) {
+            replaceClient(scanned)
+        }
+        return scanned.filter { it.matches(source) && it.method.isValid }
     }
 
     /**
@@ -126,7 +185,9 @@ class BilateralMappingCacheService(private val project: Project) {
      * @return 对应的 HttpMappingInfo，无法解析时返回 null
      */
     fun resolveMapping(method: PsiMethod): HttpMappingInfo? {
-        val key = HttpMappingInfo.qualifierOf(method)
+        val key = readAction {
+            if (method.isValid) HttpMappingInfo.qualifierOf(method) else null
+        } ?: return null
         clientMappings[key]?.takeIf { it.method.isValid }?.let { return it }
         controllerMappings[key]?.takeIf { it.method.isValid }?.let { return it }
         return computeFreshClientMapping(method) ?: computeFreshControllerMapping(method)
@@ -177,14 +238,14 @@ class BilateralMappingCacheService(private val project: Project) {
      * @param method 客户端方法
      * @return 映射结果，类不是客户端接口时返回 null
      */
-    private fun computeFreshClientMapping(method: PsiMethod): HttpMappingInfo? {
-        val cls = method.containingClass ?: return null
+    private fun computeFreshClientMapping(method: PsiMethod): HttpMappingInfo? = readAction {
+        val cls = method.containingClass ?: return@readAction null
         val kind = when {
             AnnotationParser.isFeignInterface(cls) -> EndpointKind.FEIGN
             AnnotationParser.isHttpExchangeInterface(cls) -> EndpointKind.HTTP_EXCHANGE
-            else -> return null
+            else -> return@readAction null
         }
-        return EndpointScanner.extractClientMappings(cls, kind)
+        EndpointScanner.extractClientMappings(cls, kind)
             .firstOrNull { it.method == method }
     }
 
@@ -195,12 +256,17 @@ class BilateralMappingCacheService(private val project: Project) {
      * @return 映射结果，类不是 Controller 时返回 null
      */
     private fun computeFreshControllerMapping(method: PsiMethod): HttpMappingInfo? {
-        val cls = method.containingClass ?: return null
-        if (!AnnotationParser.isControllerClass(cls)) return null
         val manualProfile = FeignHelperSettings.getInstance().state.manualActiveProfile
-        return EndpointScanner.extractControllerMappings(cls, manualProfile)
-            .firstOrNull { it.method == method }
+        return readAction {
+            val cls = method.containingClass ?: return@readAction null
+            if (!AnnotationParser.isControllerClass(cls)) return@readAction null
+            EndpointScanner.extractControllerMappings(cls, manualProfile)
+                .firstOrNull { it.method == method }
+        }
     }
+
+    private inline fun <T> readAction(crossinline block: () -> T): T =
+        ApplicationManager.getApplication().runReadAction(Computable { block() })
 
     companion object {
         /**

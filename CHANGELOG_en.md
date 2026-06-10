@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-06-10
+
+### Fixed
+
+- Fixed a PSI leak / stale-element issue caused by `LineMarkerInfo` strongly holding `PsiMethod`; the source method is now re-resolved from the latest anchor on click
+- Fixed UI freezes caused by running the fallback project-wide scan on the EDT; the lookup now runs in a cancelable background progress
+- Fixed `PsiInvalidElementAccessException` when `BilateralMappingCacheService.removeByMethod` / `resolveMapping` was called with an invalid `PsiMethod`
+- Fixed a non-atomic PSI read in `computeFreshClientMapping` by merging the two read actions into a single atomic block
+
+### Changed
+
+- Gutter icons are now always rendered when a method is applicable, so a freshly edited method can immediately trigger the fallback scan on click
+- Added a balloon notification when no matching endpoint is found, so clicks no longer fail silently
+
 ## [1.0.0] - 2026-06-09
 
 ### Added
@@ -34,5 +48,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Declares compatibility with Kotlin K1 and K2 plugin modes
 - Adds unit tests for paths, placeholders, profiles, and configuration file recognition
 
-[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sxhjlzl/feignhelper/releases/tag/v1.0.0

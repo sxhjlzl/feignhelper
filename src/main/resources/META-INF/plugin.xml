@@ -52,6 +52,14 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <h3>1.0.1</h3>
+        <ul>
+            <li>Fix a PSI stale-reference / leak risk caused by <code>LineMarkerInfo</code> strongly holding <code>PsiMethod</code>; the source method is now re-resolved from the latest anchor on click.</li>
+            <li>Run the fallback project-wide scan inside a cancelable background progress instead of on the EDT, preventing UI freezes on first click.</li>
+            <li>Guard <code>BilateralMappingCacheService</code> against invalid <code>PsiMethod</code> inputs to avoid <code>PsiInvalidElementAccessException</code>.</li>
+            <li>Always render the gutter icon when a method is applicable, so freshly edited methods can immediately trigger the fallback scan.</li>
+            <li>Show a balloon notification when no matching endpoint is found, so clicks no longer fail silently.</li>
+        </ul>
         <h3>1.0.0</h3>
         <ul>
             <li>Initial public release.</li>

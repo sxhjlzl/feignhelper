@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-06-10
+
+### Fixed 修复
+
+- 修复 `LineMarkerInfo` 强持有 `PsiMethod` 导致的 PSI 失效引用与潜在内存泄漏，改为在点击时基于最新锚点重新解析方法
+- 修复点击 gutter 图标可能在 EDT 上触发全工程扫描而卡顿的问题，兜底扫描现统一在可取消的后台进度中执行
+- 修复 `BilateralMappingCacheService.removeByMethod` / `resolveMapping` 对已失效 `PsiMethod` 调用 `qualifierOf` 时抛出 `PsiInvalidElementAccessException` 的问题
+- 修复 `computeFreshClientMapping` 拆分为两段 read action 带来的 PSI 读取不一致风险，合并为单段原子操作
+
+### Changed 改进
+
+- 行内图标即使缓存未命中也常显，确保编辑后立刻可点击触发兜底扫描
+- 未找到匹配对端接口时弹出气泡通知，避免点击图标后无任何反馈
+
 ## [1.0.0] - 2026-06-09
 
 ### Added 新增
@@ -32,5 +46,6 @@
 - 声明 Kotlin K1 / K2 插件模式兼容
 - 为路径、占位符、profile 与配置文件识别补充单元测试
 
-[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sxhjlzl/feignhelper/releases/tag/v1.0.0

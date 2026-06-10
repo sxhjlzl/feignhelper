@@ -1,0 +1,7 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="40" height="40" rx="8" fill="#0F172A"/>
+  <circle cx="11" cy="20" r="3" fill="#2DD4BF"/>
+  <path d="M14 20l8-6v12z" fill="#60A5FA"/>
+  <rect x="24" y="14" width="6" height="12" rx="1" fill="#3F75D6"/>
+  <text x="20" y="34" text-anchor="middle" font-family="Arial, sans-serif" font-size="6" font-weight="700" fill="#94A3B8">FeignHelper</text>
+</svg>

@@ -1,0 +1,125 @@
+<!-- FeignHelper plugin descriptor -->
+<idea-plugin url="https://github.com/sxhjlzl/feignhelper">
+    <id>com.lizhuolun.feignhelper</id>
+    <name>FeignHelper</name>
+    <vendor email="maybe.zhuo@qq.com" url="https://github.com/sxhjlzl/feignhelper">lizhuolun</vendor>
+
+    <description><![CDATA[
+        <h2>FeignHelper</h2>
+        <p>
+          A modern navigation assistant for <b>Spring Cloud OpenFeign</b>,
+          <b>Spring MVC</b> and the Spring 6 <b>@HttpExchange</b> declarative HTTP client,
+          built on top of IntelliJ Platform 2.x in pure Kotlin.
+        </p>
+
+        <h3>Features</h3>
+        <ul>
+            <li><b>Bidirectional gutter navigation</b> between <code>@FeignClient</code> / <code>@HttpExchange</code> interfaces and <code>@RestController</code> methods.</li>
+            <li><b>One-click path copy</b> — right-click any gutter arrow to copy the resolved endpoint path.</li>
+            <li><b>Spring configuration aware</b> — automatically resolves <code>server.servlet.context-path</code>, <code>spring.mvc.servlet.path</code>, <code>application-{profile}.yml</code> and <code>${var:default}</code> placeholders.</li>
+            <li><b>Java &amp; Kotlin</b> sources, courtesy of UAST.</li>
+            <li><b>Project-level caching</b> with incremental refresh on PSI and Spring configuration changes.</li>
+            <li><b>Bilingual UI</b> — English &amp; Simplified Chinese bundle.</li>
+        </ul>
+
+        <h3>Compatibility</h3>
+        <p>
+          IntelliJ IDEA <b>2024.3+</b> (build 243+).
+          Requires the bundled Java and Kotlin plugins.
+        </p>
+
+        <h3>Links</h3>
+        <ul>
+            <li><a href="https://github.com/sxhjlzl/feignhelper">Source on GitHub</a></li>
+            <li><a href="https://github.com/sxhjlzl/feignhelper/blob/main/CHANGELOG_en.md">Changelog</a></li>
+            <li><a href="https://github.com/sxhjlzl/feignhelper/issues">Report an issue</a></li>
+        </ul>
+
+        <hr/>
+
+        <h3>简介（中文）</h3>
+        <p>
+          <b>FeignHelper</b> 是面向 Spring Cloud OpenFeign、Spring MVC 与 Spring 6 <code>@HttpExchange</code>
+          声明式 HTTP 客户端的现代化导航助手，基于 IntelliJ Platform 2.x、Kotlin 编写。
+        </p>
+        <ul>
+            <li><code>@FeignClient</code> / <code>@HttpExchange</code> 与 <code>@RestController</code> <b>双向行内导航</b></li>
+            <li>gutter 箭头<b>右键复制解析后的接口路径</b>到剪贴板</li>
+            <li>自动解析 <code>application.yml</code> / <code>application-{profile}.yml</code> 与 <code>${var:default}</code> 占位符</li>
+            <li>同时支持 <b>Java 与 Kotlin</b>（基于 UAST）</li>
+            <li>中英双语界面</li>
+        </ul>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <h3>1.0.0</h3>
+        <ul>
+            <li>Initial public release.</li>
+            <li>Bidirectional gutter navigation between <code>@FeignClient</code> / <code>@HttpExchange</code> and <code>@RestController</code>.</li>
+            <li>Right-click gutter to copy the resolved endpoint path with balloon notification.</li>
+            <li>Java + Kotlin source support via UAST.</li>
+            <li><code>application-{profile}.yml</code> resolution and <code>${var:default}</code> placeholders.</li>
+            <li>Project-level caching with <code>@Service(Service.Level.PROJECT)</code>; asynchronous warm-up through <code>ProjectActivity</code>.</li>
+            <li>English &amp; Simplified Chinese bundle.</li>
+        </ul>
+    ]]></change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
+    <depends>org.jetbrains.kotlin</depends>
+
+    <resource-bundle>messages.FeignHelperBundle</resource-bundle>
+
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <supportsKotlinPluginMode supportsK1="true" supportsK2="true"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij">
+
+        <!-- 2 个行内导航图标 Provider（左键跳转、右键复制 URL），同时在 Java 与 Kotlin 上注册 -->
+        <codeInsight.lineMarkerProvider
+                language="JAVA"
+                implementationClass="com.lizhuolun.feignhelper.provider.linemarker.FeignToControllerLineMarker"/>
+        <codeInsight.lineMarkerProvider
+                language="kotlin"
+                implementationClass="com.lizhuolun.feignhelper.provider.linemarker.FeignToControllerLineMarker"/>
+
+        <codeInsight.lineMarkerProvider
+                language="JAVA"
+                implementationClass="com.lizhuolun.feignhelper.provider.linemarker.ControllerToFeignLineMarker"/>
+        <codeInsight.lineMarkerProvider
+                language="kotlin"
+                implementationClass="com.lizhuolun.feignhelper.provider.linemarker.ControllerToFeignLineMarker"/>
+
+        <!-- 用户配置页 -->
+        <applicationConfigurable
+                parentId="tools"
+                id="com.lizhuolun.feignhelper.settings.FeignHelperConfigurable"
+                instance="com.lizhuolun.feignhelper.settings.FeignHelperConfigurable"
+                displayName="FeignHelper"/>
+
+        <!-- 应用级 / 项目级 Service -->
+        <applicationService
+                serviceImplementation="com.lizhuolun.feignhelper.settings.FeignHelperSettings"/>
+        <projectService
+                serviceImplementation="com.lizhuolun.feignhelper.cache.PsiClassCacheService"/>
+        <projectService
+                serviceImplementation="com.lizhuolun.feignhelper.cache.BilateralMappingCacheService"/>
+
+        <!-- 工程打开后异步预热缓存 -->
+        <postStartupActivity
+                implementation="com.lizhuolun.feignhelper.listener.FeignHelperStartupActivity"/>
+
+        <!-- PSI 变更监听器 -->
+        <psiTreeChangeListener
+                implementation="com.lizhuolun.feignhelper.listener.FeignHelperPsiListener"/>
+
+        <!-- 复制 URL 时的通知组 -->
+        <notificationGroup
+                id="FeignHelper"
+                displayType="BALLOON"
+                bundle="messages.FeignHelperBundle"
+                key="notification.group.name"/>
+
+    </extensions>
+</idea-plugin>

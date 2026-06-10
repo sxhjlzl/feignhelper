@@ -1,0 +1,36 @@
+# 更新日志
+
+> [English](./CHANGELOG_en.md) | **中文**
+
+本文件记录 FeignHelper 插件的版本变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
+
+## [Unreleased]
+
+## [1.0.0] - 2026-06-09
+
+### Added 新增
+
+- `@FeignClient` 接口 ↔ `@RestController` 双向行内导航 gutter
+- `@HttpExchange` 接口 ↔ `@RestController` 双向行内导航 gutter（Spring 6 新特性支持）
+- gutter 行内方向箭头图标：**左键跳转到对端方法**，**右键复制完整 URL** 到剪贴板，含气泡通知
+- `application.yml` / `bootstrap.yml` / `application-{profile}.yml` / `bootstrap-{profile}.yml` 多文件合并解析
+- `server.servlet.context-path` 与 `spring.mvc.servlet.path` 路径前缀解析
+- `${var:default}` 占位符与多 profile 优先级处理
+- Java + Kotlin 双语言支持（基于 UAST 抽象）
+- 设置页：手动 profile 覆盖
+- 中文 + 英文双语界面
+
+### Technical 技术细节
+
+- IntelliJ Platform Gradle Plugin 2.12.0
+- Kotlin 2.3.20 + JDK 21（关闭依赖新 runtime 的协程优化，以兼容 IDEA 2024.3）
+- Gradle 9.5.0
+- 以最低支持版本 IDEA 2024.3 编译，并使用 Plugin Verifier 校验后续版本
+- 缓存采用 `@Service(Service.Level.PROJECT)`，由 IDEA 自动管理生命周期
+- 异步预热通过 `ProjectActivity` 协程，避免阻塞工程打开
+- PSI 监听覆盖增删改移动事件，Spring 配置或 profile 改动后自动刷新缓存
+- 声明 Kotlin K1 / K2 插件模式兼容
+- 为路径、占位符、profile 与配置文件识别补充单元测试
+
+[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/sxhjlzl/feignhelper/releases/tag/v1.0.0

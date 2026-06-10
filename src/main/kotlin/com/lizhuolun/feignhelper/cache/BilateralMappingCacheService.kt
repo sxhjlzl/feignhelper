@@ -1,0 +1,215 @@
+package com.lizhuolun.feignhelper.cache
+
+import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.project.DumbService
+import com.intellij.openapi.project.Project
+import com.intellij.util.Alarm
+import com.intellij.psi.PsiMethod
+import com.lizhuolun.feignhelper.core.EndpointKind
+import com.lizhuolun.feignhelper.core.HttpMappingInfo
+import com.lizhuolun.feignhelper.core.annotation.AnnotationParser
+import com.lizhuolun.feignhelper.scanner.EndpointScanner
+import com.lizhuolun.feignhelper.settings.FeignHelperSettings
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+
+/**
+ * 项目级"双边映射"缓存：分别存储客户端侧 (Feign + HttpExchange) 与 Controller 侧的 HttpMappingInfo。
+ *
+ * 查询按 HTTP 方法 + URL 匹配，性能从 O(N) 优化到 O(M)，M 为同端方法数。
+ *
+ * @author lizhuolun
+ * @date 2026/6/9
+ */
+@Service(Service.Level.PROJECT)
+class BilateralMappingCacheService(private val project: Project) {
+
+    /**
+     * 客户端侧映射缓存，key 为 HttpMappingInfo.qualifier
+     **/
+    private val clientMappings: MutableMap<String, HttpMappingInfo> = ConcurrentHashMap()
+
+    /**
+     * Controller 侧映射缓存，key 为 HttpMappingInfo.qualifier
+     **/
+    private val controllerMappings: MutableMap<String, HttpMappingInfo> = ConcurrentHashMap()
+
+    private val controllerRefreshAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, project)
+    private val controllerRefreshGeneration = AtomicLong()
+
+    /**
+     * 全量重建客户端侧缓存。
+     *
+     * @param mappings 新的客户端映射集合
+     */
+    fun replaceClient(mappings: Collection<HttpMappingInfo>) {
+        clientMappings.clear()
+        for (info in mappings) {
+            clientMappings[info.qualifier] = info
+        }
+    }
+
+    /**
+     * 全量重建 Controller 侧缓存。
+     *
+     * @param mappings 新的 Controller 映射集合
+     */
+    fun replaceController(mappings: Collection<HttpMappingInfo>) {
+        controllerMappings.clear()
+        for (info in mappings) {
+            controllerMappings[info.qualifier] = info
+        }
+    }
+
+    /**
+     * 增量覆盖，根据 EndpointKind 决定写入哪一侧。
+     *
+     * @param info 单条映射
+     */
+    fun upsert(info: HttpMappingInfo) {
+        val map = if (info.kind == EndpointKind.CONTROLLER) controllerMappings else clientMappings
+        map[info.qualifier] = info
+    }
+
+    /**
+     * 按方法移除缓存，用于 childRemoved 或 psi 修改时清除旧条目。
+     *
+     * @param method 已失效或被修改的方法
+     */
+    fun removeByMethod(method: PsiMethod) {
+        val key = HttpMappingInfo.qualifierOf(method)
+        clientMappings.remove(key)
+        controllerMappings.remove(key)
+    }
+
+    /**
+     * 移除整个类下的所有方法映射，按类全限定名前缀匹配。
+     *
+     * @param qualifiedName 类全限定名
+     */
+    fun removeByClassQualifiedName(qualifiedName: String) {
+        val prefix = "$qualifiedName#"
+        clientMappings.keys.removeIf { it.startsWith(prefix) }
+        controllerMappings.keys.removeIf { it.startsWith(prefix) }
+    }
+
+    /**
+     * 给定一个客户端方法，找出所有匹配的 Controller 映射。
+     *
+     * @param clientMethod 客户端方法
+     * @return 匹配的 Controller 端映射列表
+     */
+    fun findControllerTargets(clientMethod: PsiMethod): List<HttpMappingInfo> {
+        val source = computeFreshClientMapping(clientMethod) ?: return emptyList()
+        upsert(source)
+        return controllerMappings.values.filter { it.matches(source) && it.method.isValid }
+    }
+
+    /**
+     * 给定一个 Controller 方法，找出所有匹配的客户端映射。
+     *
+     * @param controllerMethod Controller 方法
+     * @return 匹配的客户端映射列表
+     */
+    fun findClientTargets(controllerMethod: PsiMethod): List<HttpMappingInfo> {
+        val source = computeFreshControllerMapping(controllerMethod) ?: return emptyList()
+        upsert(source)
+        return clientMappings.values.filter { it.matches(source) && it.method.isValid }
+    }
+
+    /**
+     * 直接根据方法定位缓存中的映射，不存在时即时计算并写入。
+     *
+     * @param method 要解析的方法
+     * @return 对应的 HttpMappingInfo，无法解析时返回 null
+     */
+    fun resolveMapping(method: PsiMethod): HttpMappingInfo? {
+        val key = HttpMappingInfo.qualifierOf(method)
+        clientMappings[key]?.takeIf { it.method.isValid }?.let { return it }
+        controllerMappings[key]?.takeIf { it.method.isValid }?.let { return it }
+        return computeFreshClientMapping(method) ?: computeFreshControllerMapping(method)
+    }
+
+    /**
+     * 清空缓存，通常仅在测试或异常恢复路径调用。
+     */
+    fun clear() {
+        clientMappings.clear()
+        controllerMappings.clear()
+    }
+
+    /**
+     * 异步重建 Controller 映射。连续配置变更会合并为最后一次刷新。
+     */
+    fun scheduleControllerRefresh(delayMillis: Int = 300) {
+        val generation = controllerRefreshGeneration.incrementAndGet()
+        controllerRefreshAlarm.cancelAllRequests()
+        controllerRefreshAlarm.addRequest(
+            {
+                DumbService.getInstance(project).runWhenSmart {
+                    ApplicationManager.getApplication().executeOnPooledThread {
+                        if (project.isDisposed || generation != controllerRefreshGeneration.get()) {
+                            return@executeOnPooledThread
+                        }
+                        val manualProfile = FeignHelperSettings.getInstance().state.manualActiveProfile
+                        val mappings = EndpointScanner.scanControllerEndpoints(project, manualProfile)
+                        if (project.isDisposed || generation != controllerRefreshGeneration.get()) {
+                            return@executeOnPooledThread
+                        }
+                        replaceController(mappings)
+                        ApplicationManager.getApplication().invokeLater {
+                            if (!project.isDisposed) {
+                                DaemonCodeAnalyzer.getInstance(project).settingsChanged()
+                            }
+                        }
+                    }
+                }
+            },
+            delayMillis,
+        )
+    }
+
+    /**
+     * 临时从 PSI 反向解析客户端映射，用于缓存未命中时的兜底。
+     *
+     * @param method 客户端方法
+     * @return 映射结果，类不是客户端接口时返回 null
+     */
+    private fun computeFreshClientMapping(method: PsiMethod): HttpMappingInfo? {
+        val cls = method.containingClass ?: return null
+        val kind = when {
+            AnnotationParser.isFeignInterface(cls) -> EndpointKind.FEIGN
+            AnnotationParser.isHttpExchangeInterface(cls) -> EndpointKind.HTTP_EXCHANGE
+            else -> return null
+        }
+        return EndpointScanner.extractClientMappings(cls, kind)
+            .firstOrNull { it.method == method }
+    }
+
+    /**
+     * 临时从 PSI 反向解析 Controller 映射，用于缓存未命中时的兜底。
+     *
+     * @param method Controller 方法
+     * @return 映射结果，类不是 Controller 时返回 null
+     */
+    private fun computeFreshControllerMapping(method: PsiMethod): HttpMappingInfo? {
+        val cls = method.containingClass ?: return null
+        if (!AnnotationParser.isControllerClass(cls)) return null
+        val manualProfile = FeignHelperSettings.getInstance().state.manualActiveProfile
+        return EndpointScanner.extractControllerMappings(cls, manualProfile)
+            .firstOrNull { it.method == method }
+    }
+
+    companion object {
+        /**
+         * 便捷获取入口，避免业务代码到处写 project.getService(...)。
+         *
+         * @param project 当前工程
+         * @return 项目级缓存 Service
+         */
+        fun of(project: Project): BilateralMappingCacheService =
+            project.getService(BilateralMappingCacheService::class.java)
+    }
+}

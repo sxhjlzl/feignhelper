@@ -9,6 +9,22 @@
   <p>面向 Spring Cloud / Spring Boot 3 / Spring 6 的现代化 Feign &amp; HTTP 接口导航助手</p>
 
   <p>
+    <a href="https://plugins.jetbrains.com/plugin/32207-feignhelper">
+      <img alt="JetBrains Plugin Version" src="https://img.shields.io/jetbrains/plugin/v/32207-feignhelper?style=flat&label=Marketplace&color=2DA44E">
+    </a>
+    <a href="https://plugins.jetbrains.com/plugin/32207-feignhelper">
+      <img alt="JetBrains Plugin Downloads" src="https://img.shields.io/jetbrains/plugin/d/32207-feignhelper?style=flat&color=3DA639">
+    </a>
+    <a href="https://plugins.jetbrains.com/plugin/32207-feignhelper/reviews">
+      <img alt="JetBrains Plugin Rating" src="https://img.shields.io/jetbrains/plugin/r/rating/32207-feignhelper?style=flat&color=FFB400">
+    </a>
+    <a href="https://github.com/sxhjlzl/feignhelper/releases/latest">
+      <img alt="GitHub Release" src="https://img.shields.io/github/v/release/sxhjlzl/feignhelper?style=flat&logo=github&color=24292E">
+    </a>
+    <a href="https://github.com/sxhjlzl/feignhelper/stargazers">
+      <img alt="GitHub Stars" src="https://img.shields.io/github/stars/sxhjlzl/feignhelper?style=flat&logo=github&color=181717">
+    </a>
+    <img alt="IntelliJ Platform" src="https://img.shields.io/badge/IntelliJ%20IDEA-2024.3%2B-000?style=flat&logo=intellijidea">
     <a href="./LICENSE">
       <img alt="License" src="https://img.shields.io/github/license/sxhjlzl/feignhelper?style=flat">
     </a>

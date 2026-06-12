@@ -9,9 +9,9 @@ import com.intellij.openapi.util.IconLoader
  */
 object RestIcons {
 
-    /** Feign / HttpExchange 客户端方法 -> Controller 的导航图标（右向箭头） */
+    /** Feign / HttpExchange 客户端方法 -> Controller 的导航图标（右向三角） */
     val JUMP_FEIGN_TO_CONTROLLER = IconLoader.getIcon("/icons/jumpAction_feign.svg", RestIcons::class.java)
 
-    /** Controller 方法 -> Feign / HttpExchange 客户端的导航图标（左向箭头） */
+    /** Controller 方法 -> Feign / HttpExchange 客户端的导航图标（左向三角） */
     val JUMP_CONTROLLER_TO_FEIGN = IconLoader.getIcon("/icons/jumpAction_controller.svg", RestIcons::class.java)
 }

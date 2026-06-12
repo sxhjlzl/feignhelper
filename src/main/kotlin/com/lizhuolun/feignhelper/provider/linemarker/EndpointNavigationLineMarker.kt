@@ -46,6 +46,13 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
     protected abstract fun isApplicable(method: PsiMethod): Boolean
 
     /**
+     * 判断当前方法在工程里是否存在对端匹配项。
+     *
+     * 实现应尽可能轻量，避免在 LineMarker 渲染（read action）期间触发全工程扫描。
+     */
+    protected abstract fun hasCounterpart(project: Project, method: PsiMethod): Boolean
+
+    /**
      * 查找跳转目标。
      */
     protected abstract fun findTargets(project: Project, method: PsiMethod): List<HttpMappingInfo>
@@ -67,7 +74,9 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
         val method = UastElementUtils.extractMethodForNameAnchor(element) ?: return null
         if (!isApplicable(method)) return null
 
-        // 尝试从缓存获取 URL，即使获取失败也显示图标，点击时会触发兜底扫描
+        // 1.0.2: 只有存在对端匹配时才显示 gutter 图标，避免无对应接口的方法出现冗余图标
+        if (!hasCounterpart(project, method)) return null
+
         val selfUrl = resolveSelfUrl(project, method)
 
         val tooltipTitle = FeignHelperBundle.message(titleKey)

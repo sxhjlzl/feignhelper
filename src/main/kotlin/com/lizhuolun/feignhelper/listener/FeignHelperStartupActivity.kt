@@ -1,5 +1,7 @@
 package com.lizhuolun.feignhelper.listener
 
+import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.smartReadAction
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.DumbService
@@ -68,6 +70,14 @@ class FeignHelperStartupActivity : ProjectActivity {
                 "FeignHelper: 预热完成, clientEndpoints=${clientEndpoints.size}, " +
                     "controllerEndpoints=${controllerEndpoints.size}",
             )
+
+            // 缓存就绪后通知 DaemonCodeAnalyzer 重新渲染行内图标，
+            // 确保有对端匹配的 Feign / Controller 方法能立即显示 gutter。
+            ApplicationManager.getApplication().invokeLater {
+                if (!project.isDisposed) {
+                    DaemonCodeAnalyzer.getInstance(project).settingsChanged()
+                }
+            }
         }
     }
 

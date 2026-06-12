@@ -52,6 +52,12 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <h3>1.0.2</h3>
+        <ul>
+            <li>Gutter icons are now rendered only when a counterpart exists: a <code>@FeignClient</code> / <code>@HttpExchange</code> method shows the icon only when a matching <code>@RestController</code> method is found, and vice versa.</li>
+            <li>The cache-only counterpart check keeps LineMarker rendering fast and avoids blocking the EDT with project-wide scans.</li>
+            <li>After asynchronous cache warm-up on project open, the daemon is notified so matched icons appear immediately.</li>
+        </ul>
         <h3>1.0.1</h3>
         <ul>
             <li>Fix a PSI stale-reference / leak risk caused by <code>LineMarkerInfo</code> strongly holding <code>PsiMethod</code>; the source method is now re-resolved from the latest anchor on click.</li>

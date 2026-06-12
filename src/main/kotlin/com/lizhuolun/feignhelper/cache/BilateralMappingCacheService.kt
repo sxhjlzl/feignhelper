@@ -99,6 +99,36 @@ class BilateralMappingCacheService(private val project: Project) {
     }
 
     /**
+     * 判断给定的客户端方法是否存在匹配的 Controller 映射。
+     *
+     * 实现为仅查询缓存 + 对应当前方法做即时解析，不会触发全工程兜底扫描，
+     * 以保证在 LineMarker 渲染（EDT / read action）期间不会卡顿。
+     *
+     * @param clientMethod 客户端方法
+     * @return 存在至少一个匹配的 Controller 映射时返回 true
+     */
+    fun hasControllerCounterpart(clientMethod: PsiMethod): Boolean {
+        if (!readAction { clientMethod.isValid }) return false
+        val source = resolveClientSource(clientMethod) ?: return false
+        return controllerMappings.values.any { it.matches(source) && it.method.isValid }
+    }
+
+    /**
+     * 判断给定的 Controller 方法是否存在匹配的客户端映射。
+     *
+     * 实现为仅查询缓存 + 对应当前方法做即时解析，不会触发全工程兜底扫描，
+     * 以保证在 LineMarker 渲染（EDT / read action）期间不会卡顿。
+     *
+     * @param controllerMethod Controller 方法
+     * @return 存在至少一个匹配的客户端映射时返回 true
+     */
+    fun hasClientCounterpart(controllerMethod: PsiMethod): Boolean {
+        if (!readAction { controllerMethod.isValid }) return false
+        val source = resolveControllerSource(controllerMethod) ?: return false
+        return clientMappings.values.any { it.matches(source) && it.method.isValid }
+    }
+
+    /**
      * 给定一个客户端方法，找出所有匹配的 Controller 映射。
      *
      * @param clientMethod 客户端方法
@@ -230,6 +260,36 @@ class BilateralMappingCacheService(private val project: Project) {
             },
             delayMillis,
         )
+    }
+
+    /**
+     * 按 qualifier 优先从缓存、其次从 PSI 即时解析客户端方法的映射。
+     * 解析成功后会写入缓存，但不会像 [findControllerTargets] 那样触发全工程扫描。
+     *
+     * @param method 客户端方法
+     * @return 映射结果，不存在时返回 null
+     */
+    private fun resolveClientSource(method: PsiMethod): HttpMappingInfo? {
+        val key = readAction { HttpMappingInfo.qualifierOf(method) }
+        clientMappings[key]?.takeIf { it.method.isValid }?.let { return it }
+        val fresh = computeFreshClientMapping(method) ?: return null
+        upsert(fresh)
+        return fresh
+    }
+
+    /**
+     * 按 qualifier 优先从缓存、其次从 PSI 即时解析 Controller 方法的映射。
+     * 解析成功后会写入缓存，但不会像 [findClientTargets] 那样触发全工程扫描。
+     *
+     * @param method Controller 方法
+     * @return 映射结果，不存在时返回 null
+     */
+    private fun resolveControllerSource(method: PsiMethod): HttpMappingInfo? {
+        val key = readAction { HttpMappingInfo.qualifierOf(method) }
+        controllerMappings[key]?.takeIf { it.method.isValid }?.let { return it }
+        val fresh = computeFreshControllerMapping(method) ?: return null
+        upsert(fresh)
+        return fresh
     }
 
     /**

@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-12
+
+### Changed 改进
+
+- gutter 图标仅在存在对端匹配时显示：`@FeignClient` / `@HttpExchange` 方法只有找到对应 `@RestController` 方法时才出现图标，反之亦然
+- 对端存在性检查基于缓存 + 当前方法即时解析，避免 LineMarker 渲染期间触发全工程扫描导致 EDT 卡顿
+- 工程打开异步预热完成后通知 `DaemonCodeAnalyzer` 重新渲染，使匹配图标在缓存就绪后立即出现
+
 ## [1.0.1] - 2026-06-10
 
 ### Fixed 修复
@@ -46,6 +54,7 @@
 - 声明 Kotlin K1 / K2 插件模式兼容
 - 为路径、占位符、profile 与配置文件识别补充单元测试
 
-[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sxhjlzl/feignhelper/releases/tag/v1.0.0

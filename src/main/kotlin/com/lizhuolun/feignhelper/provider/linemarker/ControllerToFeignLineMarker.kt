@@ -25,6 +25,9 @@ class ControllerToFeignLineMarker : EndpointNavigationLineMarker() {
         return AnnotationParser.findRestfulAnnotation(method) != null
     }
 
+    override fun hasCounterpart(project: Project, method: PsiMethod): Boolean =
+        BilateralMappingCacheService.of(project).hasClientCounterpart(method)
+
     override fun findTargets(project: Project, method: PsiMethod): List<HttpMappingInfo> =
         BilateralMappingCacheService.of(project)
             .findClientTargets(method)

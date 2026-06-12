@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-12
+
+### Changed
+
+- Gutter icons are now rendered only when a counterpart exists: a `@FeignClient` / `@HttpExchange` method shows the icon only when a matching `@RestController` method is found, and vice versa
+- The counterpart existence check uses the cache plus on-demand resolution of the current method, avoiding project-wide scans during LineMarker rendering and keeping the EDT responsive
+- After asynchronous cache warm-up on project open, the daemon is notified so matched icons appear immediately
+
 ## [1.0.1] - 2026-06-10
 
 ### Fixed
@@ -48,6 +56,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Declares compatibility with Kotlin K1 and K2 plugin modes
 - Adds unit tests for paths, placeholders, profiles, and configuration file recognition
 
-[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sxhjlzl/feignhelper/releases/tag/v1.0.0

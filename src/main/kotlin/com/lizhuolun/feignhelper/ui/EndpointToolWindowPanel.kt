@@ -9,6 +9,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
+import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBTabbedPane
@@ -19,7 +20,6 @@ import com.lizhuolun.feignhelper.core.HttpMappingInfo
 import com.lizhuolun.feignhelper.scanner.EndpointScanner
 import com.lizhuolun.feignhelper.settings.FeignHelperSettings
 import java.awt.BorderLayout
-import java.awt.FlowLayout
 import javax.swing.BorderFactory
 
 /**
@@ -41,7 +41,14 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         border = BorderFactory.createEmptyBorder(4, 8, 4, 8)
     }
 
+    /**
+     * 搜索栏是否可见；初始为隐藏。
+     */
+    private var isSearchVisible: Boolean = false
+
     init {
+        border = BorderFactory.createEmptyBorder()
+
         tabs.apply {
             addTab(controllerTitle(0), controllerTree)
             addTab(feignTitle(0), feignTree)
@@ -51,15 +58,26 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
 
         val toolbar = ActionManager.getInstance().createActionToolbar(
             "FeignHelper.ToolWindow",
-            DefaultActionGroup(RefreshAction(), CollapseAllAction()),
+            DefaultActionGroup(SearchAction(), RefreshAction(), CollapseAllAction()),
             true,
         )
         toolbar.targetComponent = this
-        add(toolbar.component, BorderLayout.NORTH)
 
-        val statusPanel = JBPanel<JBPanel<*>>(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-            border = BorderFactory.createMatteBorder(1, 0, 0, 0, com.intellij.ui.JBColor.GRAY.brighter())
-            add(statusLabel)
+        val toolbarPanel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
+            border = BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, JBColor.GRAY.brighter()),
+                BorderFactory.createEmptyBorder(2, 4, 2, 4),
+            )
+            add(toolbar.component, BorderLayout.WEST)
+        }
+        add(toolbarPanel, BorderLayout.NORTH)
+
+        val statusPanel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
+            border = BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, JBColor.GRAY.brighter()),
+                BorderFactory.createEmptyBorder(4, 8, 4, 8),
+            )
+            add(statusLabel, BorderLayout.WEST)
         }
         add(statusPanel, BorderLayout.SOUTH)
 
@@ -71,6 +89,9 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
             tabs.setTitleAt(1, feignTitle(total))
             updateStatusLabel()
         }
+
+        controllerTree.setSearchVisible(false)
+        feignTree.setSearchVisible(false)
     }
 
     /**
@@ -140,6 +161,21 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
             )
         } catch (e: Exception) {
             emptyList<HttpMappingInfo>() to emptyList<HttpMappingInfo>()
+        }
+    }
+
+    /**
+     * 工具窗口顶部搜索按钮，点击切换搜索栏显示/隐藏。
+     */
+    private inner class SearchAction : AnAction(
+        FeignHelperBundle.message("toolwindow.action.search"),
+        null,
+        AllIcons.Actions.Search,
+    ) {
+        override fun actionPerformed(e: AnActionEvent) {
+            isSearchVisible = !isSearchVisible
+            controllerTree.setSearchVisible(isSearchVisible)
+            feignTree.setSearchVisible(isSearchVisible)
         }
     }
 

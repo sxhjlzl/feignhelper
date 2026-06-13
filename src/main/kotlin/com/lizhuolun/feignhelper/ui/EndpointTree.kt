@@ -9,22 +9,28 @@ import com.intellij.openapi.util.Computable
 import com.intellij.psi.NavigatablePsiElement
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.SmartPointerManager
+import com.intellij.icons.AllIcons
 import com.intellij.ui.DoubleClickListener
 import com.intellij.ui.JBColor
+import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.treeStructure.Tree
-import java.awt.Dimension
-import javax.swing.BorderFactory
 import com.lizhuolun.feignhelper.FeignHelperBundle
 import com.lizhuolun.feignhelper.cache.BilateralMappingCacheService
 import com.lizhuolun.feignhelper.core.EndpointKind
 import com.lizhuolun.feignhelper.core.HttpMappingInfo
 import java.awt.BorderLayout
+import java.awt.Cursor
+import java.awt.Dimension
+import java.awt.FlowLayout
 import java.awt.datatransfer.StringSelection
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
+import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import javax.swing.BorderFactory
+import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JPopupMenu
 import javax.swing.event.DocumentEvent
@@ -53,11 +59,28 @@ class EndpointTree(
     }
     private val filterField = JBTextField().apply {
         emptyText.text = FeignHelperBundle.message("toolwindow.filter.placeholder")
-        preferredSize = Dimension(preferredSize.width, 28)
+        border = BorderFactory.createEmptyBorder(2, 4, 2, 4)
+    }
+
+    private val clearLabel = JLabel("×").apply {
+        foreground = JBColor.GRAY
+        cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        isVisible = false
+        addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) {
+                filterField.text = ""
+            }
+        })
+    }
+
+    private val searchPanel = JPanel(BorderLayout(4, 0)).apply {
         border = BorderFactory.createCompoundBorder(
             BorderFactory.createMatteBorder(0, 0, 1, 0, JBColor.GRAY.brighter()),
-            BorderFactory.createEmptyBorder(2, 6, 2, 6),
+            BorderFactory.createEmptyBorder(6, 8, 6, 8),
         )
+        add(JBLabel(AllIcons.Actions.Search), BorderLayout.WEST)
+        add(filterField, BorderLayout.CENTER)
+        add(clearLabel, BorderLayout.EAST)
     }
 
     /**
@@ -81,7 +104,7 @@ class EndpointTree(
     var onCountsChanged: ((total: Int, filtered: Int) -> Unit)? = null
 
     init {
-        add(filterField, BorderLayout.NORTH)
+        add(searchPanel, BorderLayout.NORTH)
         add(JBScrollPane(tree).apply {
             border = BorderFactory.createEmptyBorder()
         }, BorderLayout.CENTER)
@@ -138,6 +161,7 @@ class EndpointTree(
 
     private fun onFilterTextChanged() {
         val text = filterField.text.trim()
+        clearLabel.isVisible = text.isNotEmpty()
         if (text == lastFilterText) return
         lastFilterText = text
         applyFilter(text)
@@ -174,6 +198,17 @@ class EndpointTree(
         for (i in tree.rowCount - 1 downTo 0) {
             tree.collapseRow(i)
         }
+    }
+
+    /**
+     * 控制搜索栏的显示/隐藏。
+     *
+     * @param visible true 显示，false 隐藏
+     */
+    fun setSearchVisible(visible: Boolean) {
+        searchPanel.isVisible = visible
+        revalidate()
+        repaint()
     }
 
     /**

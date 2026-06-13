@@ -38,7 +38,16 @@ class EndpointTreeCellRenderer : ColoredTreeCellRenderer() {
 
     private fun renderGroupNode(node: EndpointNode) {
         icon = AllIcons.Nodes.Class
-        append(node.title, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+        val title = node.title
+        val countMatch = Regex("^(.*) \\((\\d+)\\)$").find(title)
+        if (countMatch != null) {
+            val (className, count) = countMatch.destructured
+            append(className, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+            append("  ", SimpleTextAttributes.REGULAR_ATTRIBUTES)
+            append("($count)", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        } else {
+            append(title, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+        }
     }
 
     private fun renderEndpointNode(node: EndpointNode) {

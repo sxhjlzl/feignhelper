@@ -3,8 +3,7 @@
 </div>
 
 <div align="center">
-  <img src="./src/main/resources/icons/jumpAction_feign.svg" height="64">
-  <img src="./src/main/resources/icons/jumpAction_controller.svg" height="64">
+  <img src="./src/main/resources/META-INF/pluginIcon.svg" height="96">
   <h1>FeignHelper</h1>
   <p>Modern navigation assistant for Spring Cloud OpenFeign, Spring MVC and Spring 6 <code>@HttpExchange</code> in IntelliJ IDEA.</p>
 
@@ -75,6 +74,11 @@ In any Spring project:
   - **Left-click** → jump to the matching Feign / HttpExchange method
   - **Right-click** → popup menu to copy the full URL
 - When more than one target matches, left-click opens a chooser popup
+- **FeignHelper tool window** (IDE right sidebar `FeignHelper`):
+  - Two tabs list all **Controller endpoints** and all **Feign / HttpExchange endpoints**
+  - Grouped by class, sorted by URL + HTTP method, with endpoint count statistics
+  - Filter by URL, HTTP method, or class name
+  - Double-click/Enter jumps to source; right-click copies URL or navigates to the counterpart
 
 `Settings` → `Tools` → `FeignHelper`:
 

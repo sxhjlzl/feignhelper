@@ -8,6 +8,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
 import com.intellij.psi.PsiMethod
 import com.intellij.util.Alarm
+import com.intellij.util.messages.MessageBus
 import com.lizhuolun.feignhelper.core.EndpointKind
 import com.lizhuolun.feignhelper.core.HttpMappingInfo
 import com.lizhuolun.feignhelper.core.annotation.AnnotationParser
@@ -224,6 +225,24 @@ class BilateralMappingCacheService(private val project: Project) {
     }
 
     /**
+     * 获取当前所有有效的客户端侧映射快照。
+     *
+     * @return 有效的客户端映射列表
+     */
+    fun getAllClientMappings(): List<HttpMappingInfo> = readAction {
+        clientMappings.values.filter { it.method.isValid }
+    }
+
+    /**
+     * 获取当前所有有效的 Controller 侧映射快照。
+     *
+     * @return 有效的 Controller 映射列表
+     */
+    fun getAllControllerMappings(): List<HttpMappingInfo> = readAction {
+        controllerMappings.values.filter { it.method.isValid }
+    }
+
+    /**
      * 清空缓存，通常仅在测试或异常恢复路径调用。
      */
     fun clear() {
@@ -253,6 +272,7 @@ class BilateralMappingCacheService(private val project: Project) {
                         ApplicationManager.getApplication().invokeLater {
                             if (!project.isDisposed) {
                                 DaemonCodeAnalyzer.getInstance(project).settingsChanged()
+                                project.messageBus.syncPublisher(CacheChangeListener.TOPIC).onCacheChanged()
                             }
                         }
                     }

@@ -52,6 +52,13 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <h3>1.0.3</h3>
+        <ul>
+            <li>New tool window on the right side: browse all Controller endpoints and all Feign / HttpExchange endpoints in two tabs.</li>
+            <li>Endpoints are grouped by class, sorted by URL + HTTP method, and filterable by URL, method, or class name.</li>
+            <li>Double-click/Enter jumps to source; right-click copies URL or navigates to the counterpart.</li>
+            <li>Lists refresh automatically when PSI or Spring configuration changes.</li>
+        </ul>
         <h3>1.0.2</h3>
         <ul>
             <li>Gutter icons are now rendered only when a counterpart exists: a <code>@FeignClient</code> / <code>@HttpExchange</code> method shows the icon only when a matching <code>@RestController</code> method is found, and vice versa.</li>
@@ -119,6 +126,16 @@
                 serviceImplementation="com.lizhuolun.feignhelper.cache.PsiClassCacheService"/>
         <projectService
                 serviceImplementation="com.lizhuolun.feignhelper.cache.BilateralMappingCacheService"/>
+        <projectService
+                serviceImplementation="com.lizhuolun.feignhelper.ui.EndpointToolWindowService"/>
+
+        <!-- FeignHelper 工具窗口：展示 Controller / Feign 端点列表 -->
+        <toolWindow
+                id="FeignHelper"
+                anchor="right"
+                factoryClass="com.lizhuolun.feignhelper.ui.EndpointToolWindowFactory"
+                icon="/icons/toolWindow.svg"
+                canCloseContents="false"/>
 
         <!-- 工程打开后异步预热缓存 -->
         <postStartupActivity

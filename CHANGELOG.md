@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-06-12
+
+### Added 新增
+
+- 新增 **FeignHelper 工具窗口**，位于 IDE 右侧边栏
+- 工具窗口提供两个 Tab：
+  - **Controller 接口列表**：展示所有 `@RestController` / `@Controller` 端点
+  - **Feign / HttpExchange 接口列表**：展示所有 `@FeignClient` / `@HttpExchange` 端点
+- 列表按类全限定名分组，组内按 URL + HTTP 方法排序
+- 支持按 URL、HTTP 方法或类名过滤
+- 双击或回车跳转源码，右键支持复制 URL 与跳转到对端接口
+- 列表随 PSI 变更、Spring 配置变更与缓存预热自动刷新
+
 ## [1.0.2] - 2026-06-12
 
 ### Changed 改进
@@ -54,7 +67,8 @@
 - 声明 Kotlin K1 / K2 插件模式兼容
 - 为路径、占位符、profile 与配置文件识别补充单元测试
 
-[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sxhjlzl/feignhelper/releases/tag/v1.0.0

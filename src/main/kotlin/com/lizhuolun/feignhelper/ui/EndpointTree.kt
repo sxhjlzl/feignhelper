@@ -1,0 +1,204 @@
+package com.lizhuolun.feignhelper.ui
+
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
+import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.util.Computable
+import com.intellij.psi.NavigatablePsiElement
+import com.intellij.psi.PsiMethod
+import com.intellij.psi.SmartPointerManager
+import com.intellij.ui.DoubleClickListener
+import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.components.JBTextField
+import com.intellij.ui.treeStructure.Tree
+import com.lizhuolun.feignhelper.FeignHelperBundle
+import com.lizhuolun.feignhelper.cache.BilateralMappingCacheService
+import com.lizhuolun.feignhelper.core.EndpointKind
+import com.lizhuolun.feignhelper.core.HttpMappingInfo
+import java.awt.BorderLayout
+import java.awt.datatransfer.StringSelection
+import java.awt.event.KeyAdapter
+import java.awt.event.KeyEvent
+import java.awt.event.MouseEvent
+import javax.swing.JPanel
+import javax.swing.JPopupMenu
+
+/**
+ * 端点列表树组件，包含过滤输入框与树形展示。
+ *
+ * @param project 当前工程
+ * @param kind 本树展示的端点类别，用于计算对端跳转
+ * @author lizhuolun
+ * @date 2026/6/12
+ */
+class EndpointTree(
+    private val project: Project,
+    private val kind: EndpointKind,
+) : JPanel(BorderLayout()) {
+
+    private val treeModel = EndpointTreeModel()
+    private val tree = Tree(treeModel).apply {
+        isRootVisible = false
+        showsRootHandles = true
+        emptyText.text = FeignHelperBundle.message("toolwindow.empty.text")
+    }
+    private val filterField = JBTextField().apply {
+        emptyText.text = FeignHelperBundle.message("toolwindow.filter.placeholder")
+    }
+
+    /**
+     * 当前完整端点数据，用于过滤时重建树。
+     */
+    private var allItems: List<EndpointTreeItem> = emptyList()
+
+    init {
+        add(filterField, BorderLayout.NORTH)
+        add(JBScrollPane(tree), BorderLayout.CENTER)
+        setupListeners()
+    }
+
+    /**
+     * 刷新整棵树。
+     *
+     * 调用方应确保在 read action 内传入 endpoints，或保证其中的 PSI 属性已可安全访问。
+     * 本方法会在 read action 内一次性提取展示所需字段并创建 SmartPointer，
+     * 后续过滤与渲染不再触碰 PSI。
+     *
+     * @param endpoints 新的端点列表
+     */
+    fun refresh(endpoints: List<HttpMappingInfo>) {
+        val smartManager = SmartPointerManager.getInstance(project)
+        val items = ApplicationManager.getApplication().runReadAction(Computable {
+            endpoints.mapNotNull { info ->
+                if (!info.method.isValid) return@mapNotNull null
+                val pointer = smartManager.createSmartPsiElementPointer(info.method)
+                EndpointTreeItem.from(info, pointer)
+            }
+        })
+        allItems = items
+        applyFilter(filterField.text.trim())
+    }
+
+    private fun setupListeners() {
+        filterField.addCaretListener {
+            applyFilter(filterField.text.trim())
+        }
+
+        tree.addKeyListener(object : KeyAdapter() {
+            override fun keyPressed(e: KeyEvent) {
+                if (e.keyCode == KeyEvent.VK_ENTER) {
+                    navigateSelected()
+                    e.consume()
+                }
+            }
+        })
+
+        object : DoubleClickListener() {
+            override fun onDoubleClick(event: MouseEvent): Boolean {
+                navigateSelected()
+                return true
+            }
+        }.installOn(tree)
+
+        tree.componentPopupMenu = buildPopupMenu()
+    }
+
+    private fun applyFilter(text: String) {
+        val filtered = if (text.isBlank()) {
+            allItems
+        } else {
+            val lower = text.lowercase()
+            allItems.filter {
+                it.url.lowercase().contains(lower) ||
+                    it.httpMethod.name.lowercase().contains(lower) ||
+                    it.methodName.lowercase().contains(lower) ||
+                    it.className.lowercase().contains(lower)
+            }
+        }
+        treeModel.refresh(filtered)
+        expandAll()
+    }
+
+    private fun expandAll() {
+        for (i in 0 until tree.rowCount) {
+            tree.expandRow(i)
+        }
+    }
+
+    private fun navigateSelected() {
+        val pointer = (tree.lastSelectedPathComponent as? EndpointNode)?.pointer ?: return
+        ApplicationManager.getApplication().invokeLater {
+            if (project.isDisposed) return@invokeLater
+            val method = ApplicationManager.getApplication().runReadAction(Computable {
+                pointer.element?.takeIf { it.isValid }
+            }) ?: return@invokeLater
+            navigateToMethod(method)
+        }
+    }
+
+    private fun buildPopupMenu(): JPopupMenu {
+        val menu = JPopupMenu()
+        val navigateItem = javax.swing.JMenuItem(FeignHelperBundle.message("toolwindow.action.navigate.counterpart")).apply {
+            addActionListener { navigateToCounterpart() }
+        }
+        val copyItem = javax.swing.JMenuItem(FeignHelperBundle.message("toolwindow.action.copy.url")).apply {
+            addActionListener { copySelectedUrl() }
+        }
+        menu.add(navigateItem)
+        menu.add(copyItem)
+        return menu
+    }
+
+    private fun copySelectedUrl() {
+        val node = tree.lastSelectedPathComponent as? EndpointNode ?: return
+        val url = node.item?.url ?: return
+        CopyPasteManager.getInstance().setContents(StringSelection(url))
+    }
+
+    private fun navigateToCounterpart() {
+        val node = tree.lastSelectedPathComponent as? EndpointNode ?: return
+        val pointer = node.pointer ?: return
+
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val method = ApplicationManager.getApplication().runReadAction(Computable {
+                pointer.element?.takeIf { it.isValid }
+            }) ?: return@executeOnPooledThread
+
+            val targets = when (kind) {
+                EndpointKind.CONTROLLER -> BilateralMappingCacheService.of(project).findClientTargets(method)
+                else -> BilateralMappingCacheService.of(project).findControllerTargets(method)
+            }
+
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+                val valid = ApplicationManager.getApplication().runReadAction(Computable {
+                    targets.mapNotNull { it.method }
+                        .filter { it.isValid }
+                        .filterIsInstance<NavigatablePsiElement>()
+                })
+                when (valid.size) {
+                    0 -> {}
+                    1 -> valid[0].navigate(true)
+                    else -> JBPopupFactory.getInstance()
+                        .createPopupChooserBuilder(valid)
+                        .setTitle(FeignHelperBundle.message("toolwindow.action.navigate.counterpart"))
+                        .setItemSelectedCallback { it?.navigate(true) }
+                        .createPopup()
+                        .showInFocusCenter()
+                }
+            }
+        }
+    }
+
+    private fun navigateToMethod(method: PsiMethod) {
+        ApplicationManager.getApplication().runReadAction(Computable {
+            val file = method.containingFile?.virtualFile ?: return@Computable null
+            val offset = method.textOffset
+            OpenFileDescriptor(project, file, offset)
+        })?.let {
+            it.navigate(true)
+        }
+    }
+}

@@ -9,6 +9,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.psi.PsiClass
 import com.lizhuolun.feignhelper.cache.BilateralMappingCacheService
+import com.lizhuolun.feignhelper.cache.CacheChangeListener
 import com.lizhuolun.feignhelper.cache.PsiClassCacheService
 import com.lizhuolun.feignhelper.core.EndpointKind
 import com.lizhuolun.feignhelper.core.HttpMappingInfo
@@ -72,10 +73,11 @@ class FeignHelperStartupActivity : ProjectActivity {
             )
 
             // 缓存就绪后通知 DaemonCodeAnalyzer 重新渲染行内图标，
-            // 确保有对端匹配的 Feign / Controller 方法能立即显示 gutter。
+            // 并通过消息总线通知工具窗口刷新。
             ApplicationManager.getApplication().invokeLater {
                 if (!project.isDisposed) {
                     DaemonCodeAnalyzer.getInstance(project).settingsChanged()
+                    project.messageBus.syncPublisher(CacheChangeListener.TOPIC).onCacheChanged()
                 }
             }
         }

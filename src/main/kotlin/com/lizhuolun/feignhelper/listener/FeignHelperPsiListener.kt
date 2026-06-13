@@ -7,6 +7,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiTreeChangeAdapter
 import com.intellij.psi.PsiTreeChangeEvent
 import com.lizhuolun.feignhelper.cache.BilateralMappingCacheService
+import com.lizhuolun.feignhelper.cache.CacheChangeListener
 import com.lizhuolun.feignhelper.cache.PsiClassCacheService
 import com.lizhuolun.feignhelper.config.ApplicationConfigReader
 import com.lizhuolun.feignhelper.core.EndpointKind
@@ -69,6 +70,7 @@ class FeignHelperPsiListener : PsiTreeChangeAdapter() {
         val qualifiedName = psiClass.qualifiedName ?: return
         PsiClassCacheService.of(project).removeByQualifiedName(qualifiedName)
         BilateralMappingCacheService.of(project).removeByClassQualifiedName(qualifiedName)
+        project.messageBus.syncPublisher(CacheChangeListener.TOPIC).onCacheChanged()
     }
 
     /**
@@ -118,6 +120,7 @@ class FeignHelperPsiListener : PsiTreeChangeAdapter() {
             EndpointScanner.extractClientMappings(psiClass, kind)
         }
         for (info in mappings) cache.upsert(info)
+        project.messageBus.syncPublisher(CacheChangeListener.TOPIC).onCacheChanged()
     }
 
     /**

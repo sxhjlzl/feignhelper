@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-06-12
+
+### Added
+
+- New **FeignHelper tool window** docked on the right side of the IDE
+- Two tabs in the tool window:
+  - **Controller Endpoints**: lists all `@RestController` / `@Controller` endpoints
+  - **Feign / HttpExchange Endpoints**: lists all `@FeignClient` / `@HttpExchange` endpoints
+- Endpoints are grouped by fully-qualified class name and sorted by URL + HTTP method
+- Filter box for URL, HTTP method, or class name
+- Double-click or Enter to jump to source; right-click to copy URL or navigate to the counterpart
+- List refreshes automatically on PSI changes, Spring configuration changes, and cache warm-up
+
 ## [1.0.2] - 2026-06-12
 
 ### Changed
@@ -56,7 +69,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Declares compatibility with Kotlin K1 and K2 plugin modes
 - Adds unit tests for paths, placeholders, profiles, and configuration file recognition
 
-[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/sxhjlzl/feignhelper/releases/tag/v1.0.0

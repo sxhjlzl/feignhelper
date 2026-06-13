@@ -2,18 +2,22 @@ package com.lizhuolun.feignhelper.cache
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.smartReadAction
 import com.intellij.openapi.components.Service
-import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
 import com.intellij.psi.PsiMethod
-import com.intellij.util.Alarm
 import com.intellij.util.messages.MessageBus
 import com.lizhuolun.feignhelper.core.EndpointKind
 import com.lizhuolun.feignhelper.core.HttpMappingInfo
 import com.lizhuolun.feignhelper.core.annotation.AnnotationParser
 import com.lizhuolun.feignhelper.scanner.EndpointScanner
 import com.lizhuolun.feignhelper.settings.FeignHelperSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -26,7 +30,10 @@ import java.util.concurrent.atomic.AtomicLong
  * @date 2026/6/9
  */
 @Service(Service.Level.PROJECT)
-class BilateralMappingCacheService(private val project: Project) {
+class BilateralMappingCacheService(
+    private val project: Project,
+    private val coroutineScope: CoroutineScope,
+) {
 
     /**
      * 客户端侧映射缓存，key 为 HttpMappingInfo.qualifier
@@ -38,7 +45,8 @@ class BilateralMappingCacheService(private val project: Project) {
      **/
     private val controllerMappings: MutableMap<String, HttpMappingInfo> = ConcurrentHashMap()
 
-    private val controllerRefreshAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, project)
+    private val controllerRefreshLock = Any()
+    private var controllerRefreshJob: Job? = null
     private val controllerRefreshGeneration = AtomicLong()
 
     /**
@@ -111,7 +119,9 @@ class BilateralMappingCacheService(private val project: Project) {
     fun hasControllerCounterpart(clientMethod: PsiMethod): Boolean {
         if (!readAction { clientMethod.isValid }) return false
         val source = resolveClientSource(clientMethod) ?: return false
-        return controllerMappings.values.any { it.matches(source) && it.method.isValid }
+        return readAction {
+            controllerMappings.values.any { it.matches(source) && it.resolveMethod() != null }
+        }
     }
 
     /**
@@ -126,7 +136,9 @@ class BilateralMappingCacheService(private val project: Project) {
     fun hasClientCounterpart(controllerMethod: PsiMethod): Boolean {
         if (!readAction { controllerMethod.isValid }) return false
         val source = resolveControllerSource(controllerMethod) ?: return false
-        return clientMappings.values.any { it.matches(source) && it.method.isValid }
+        return readAction {
+            clientMappings.values.any { it.matches(source) && it.resolveMethod() != null }
+        }
     }
 
     /**
@@ -142,7 +154,9 @@ class BilateralMappingCacheService(private val project: Project) {
         // 即时解析失败时回退到缓存条目
         if (source == null) {
             val key = readAction { HttpMappingInfo.qualifierOf(clientMethod) }
-            source = clientMappings[key]?.takeIf { it.method.isValid }
+            source = readAction {
+                clientMappings[key]?.takeIf { it.resolveMethod() != null }
+            }
         }
 
         // 缓存也未命中时兜底全量扫描客户端侧
@@ -150,7 +164,9 @@ class BilateralMappingCacheService(private val project: Project) {
             val scanned = EndpointScanner.scanClientEndpoints(project)
             if (scanned.isNotEmpty()) {
                 replaceClient(scanned)
-                source = scanned.firstOrNull { it.method == clientMethod }
+                source = readAction {
+                    scanned.firstOrNull { it.resolveMethod() == clientMethod }
+                }
             }
         }
 
@@ -158,7 +174,9 @@ class BilateralMappingCacheService(private val project: Project) {
         if (source == null) return emptyList()
 
         upsert(source)
-        val targets = controllerMappings.values.filter { it.matches(source) && it.method.isValid }
+        val targets = readAction {
+            controllerMappings.values.filter { it.matches(source) && it.resolveMethod() != null }
+        }
         if (targets.isNotEmpty() || controllerMappings.isNotEmpty()) return targets
 
         val manualProfile = FeignHelperSettings.getInstance().state.manualActiveProfile
@@ -166,7 +184,9 @@ class BilateralMappingCacheService(private val project: Project) {
         if (scanned.isNotEmpty()) {
             replaceController(scanned)
         }
-        return scanned.filter { it.matches(source) && it.method.isValid }
+        return readAction {
+            scanned.filter { it.matches(source) && it.resolveMethod() != null }
+        }
     }
 
     /**
@@ -182,7 +202,9 @@ class BilateralMappingCacheService(private val project: Project) {
         // 即时解析失败时回退到缓存条目
         if (source == null) {
             val key = readAction { HttpMappingInfo.qualifierOf(controllerMethod) }
-            source = controllerMappings[key]?.takeIf { it.method.isValid }
+            source = readAction {
+                controllerMappings[key]?.takeIf { it.resolveMethod() != null }
+            }
         }
 
         // 缓存也未命中时兜底全量扫描 Controller 侧
@@ -191,7 +213,9 @@ class BilateralMappingCacheService(private val project: Project) {
             val scanned = EndpointScanner.scanControllerEndpoints(project, manualProfile)
             if (scanned.isNotEmpty()) {
                 replaceController(scanned)
-                source = scanned.firstOrNull { it.method == controllerMethod }
+                source = readAction {
+                    scanned.firstOrNull { it.resolveMethod() == controllerMethod }
+                }
             }
         }
 
@@ -199,14 +223,18 @@ class BilateralMappingCacheService(private val project: Project) {
         if (source == null) return emptyList()
 
         upsert(source)
-        val targets = clientMappings.values.filter { it.matches(source) && it.method.isValid }
+        val targets = readAction {
+            clientMappings.values.filter { it.matches(source) && it.resolveMethod() != null }
+        }
         if (targets.isNotEmpty() || clientMappings.isNotEmpty()) return targets
 
         val scanned = EndpointScanner.scanClientEndpoints(project)
         if (scanned.isNotEmpty()) {
             replaceClient(scanned)
         }
-        return scanned.filter { it.matches(source) && it.method.isValid }
+        return readAction {
+            scanned.filter { it.matches(source) && it.resolveMethod() != null }
+        }
     }
 
     /**
@@ -219,8 +247,12 @@ class BilateralMappingCacheService(private val project: Project) {
         val key = readAction {
             if (method.isValid) HttpMappingInfo.qualifierOf(method) else null
         } ?: return null
-        clientMappings[key]?.takeIf { it.method.isValid }?.let { return it }
-        controllerMappings[key]?.takeIf { it.method.isValid }?.let { return it }
+        readAction {
+            clientMappings[key]?.takeIf { it.resolveMethod() != null }
+        }?.let { return it }
+        readAction {
+            controllerMappings[key]?.takeIf { it.resolveMethod() != null }
+        }?.let { return it }
         return computeFreshClientMapping(method) ?: computeFreshControllerMapping(method)
     }
 
@@ -230,7 +262,7 @@ class BilateralMappingCacheService(private val project: Project) {
      * @return 有效的客户端映射列表
      */
     fun getAllClientMappings(): List<HttpMappingInfo> = readAction {
-        clientMappings.values.filter { it.method.isValid }
+        clientMappings.values.filter { it.resolveMethod() != null }
     }
 
     /**
@@ -239,7 +271,7 @@ class BilateralMappingCacheService(private val project: Project) {
      * @return 有效的 Controller 映射列表
      */
     fun getAllControllerMappings(): List<HttpMappingInfo> = readAction {
-        controllerMappings.values.filter { it.method.isValid }
+        controllerMappings.values.filter { it.resolveMethod() != null }
     }
 
     /**
@@ -255,31 +287,31 @@ class BilateralMappingCacheService(private val project: Project) {
      */
     fun scheduleControllerRefresh(delayMillis: Int = 300) {
         val generation = controllerRefreshGeneration.incrementAndGet()
-        controllerRefreshAlarm.cancelAllRequests()
-        controllerRefreshAlarm.addRequest(
-            {
-                DumbService.getInstance(project).runWhenSmart {
-                    ApplicationManager.getApplication().executeOnPooledThread {
-                        if (project.isDisposed || generation != controllerRefreshGeneration.get()) {
-                            return@executeOnPooledThread
-                        }
-                        val manualProfile = FeignHelperSettings.getInstance().state.manualActiveProfile
-                        val mappings = EndpointScanner.scanControllerEndpoints(project, manualProfile)
-                        if (project.isDisposed || generation != controllerRefreshGeneration.get()) {
-                            return@executeOnPooledThread
-                        }
-                        replaceController(mappings)
-                        ApplicationManager.getApplication().invokeLater {
-                            if (!project.isDisposed) {
-                                DaemonCodeAnalyzer.getInstance(project).settingsChanged()
-                                project.messageBus.syncPublisher(CacheChangeListener.TOPIC).onCacheChanged()
-                            }
-                        }
+        synchronized(controllerRefreshLock) {
+            controllerRefreshJob?.cancel()
+            controllerRefreshJob = coroutineScope.launch(Dispatchers.Default) {
+                delay(delayMillis.toLong())
+                if (project.isDisposed || generation != controllerRefreshGeneration.get()) {
+                    return@launch
+                }
+
+                val manualProfile = FeignHelperSettings.getInstance().state.manualActiveProfile
+                val mappings = smartReadAction(project) {
+                    EndpointScanner.scanControllerEndpoints(project, manualProfile)
+                }
+                if (project.isDisposed || generation != controllerRefreshGeneration.get()) {
+                    return@launch
+                }
+
+                replaceController(mappings)
+                ApplicationManager.getApplication().invokeLater {
+                    if (!project.isDisposed) {
+                        DaemonCodeAnalyzer.getInstance(project).settingsChanged()
+                        project.messageBus.syncPublisher(CacheChangeListener.TOPIC).onCacheChanged()
                     }
                 }
-            },
-            delayMillis,
-        )
+            }
+        }
     }
 
     /**
@@ -291,7 +323,9 @@ class BilateralMappingCacheService(private val project: Project) {
      */
     private fun resolveClientSource(method: PsiMethod): HttpMappingInfo? {
         val key = readAction { HttpMappingInfo.qualifierOf(method) }
-        clientMappings[key]?.takeIf { it.method.isValid }?.let { return it }
+        readAction {
+            clientMappings[key]?.takeIf { it.resolveMethod() != null }
+        }?.let { return it }
         val fresh = computeFreshClientMapping(method) ?: return null
         upsert(fresh)
         return fresh
@@ -306,7 +340,9 @@ class BilateralMappingCacheService(private val project: Project) {
      */
     private fun resolveControllerSource(method: PsiMethod): HttpMappingInfo? {
         val key = readAction { HttpMappingInfo.qualifierOf(method) }
-        controllerMappings[key]?.takeIf { it.method.isValid }?.let { return it }
+        readAction {
+            controllerMappings[key]?.takeIf { it.resolveMethod() != null }
+        }?.let { return it }
         val fresh = computeFreshControllerMapping(method) ?: return null
         upsert(fresh)
         return fresh
@@ -326,7 +362,7 @@ class BilateralMappingCacheService(private val project: Project) {
             else -> return@readAction null
         }
         EndpointScanner.extractClientMappings(cls, kind)
-            .firstOrNull { it.method == method }
+            .firstOrNull { it.resolveMethod() == method }
     }
 
     /**
@@ -341,7 +377,7 @@ class BilateralMappingCacheService(private val project: Project) {
             val cls = method.containingClass ?: return@readAction null
             if (!AnnotationParser.isControllerClass(cls)) return@readAction null
             EndpointScanner.extractControllerMappings(cls, manualProfile)
-                .firstOrNull { it.method == method }
+                .firstOrNull { it.resolveMethod() == method }
         }
     }
 

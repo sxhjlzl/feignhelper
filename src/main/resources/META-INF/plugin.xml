@@ -2,6 +2,7 @@
 <idea-plugin url="https://github.com/sxhjlzl/feignhelper">
     <id>com.lizhuolun.feignhelper</id>
     <name>FeignHelper</name>
+    <!--suppress SpellCheckingInspection -->
     <vendor email="maybe.zhuo@qq.com" url="https://github.com/sxhjlzl/feignhelper">lizhuolun</vendor>
 
     <description><![CDATA[
@@ -52,6 +53,14 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <h3>1.0.4</h3>
+        <ul>
+            <li>Improved compatibility with IntelliJ IDEA 2024.3 through 2026.2 EAP.</li>
+            <li>Removed generated calls to deprecated and experimental <code>ToolWindowFactory</code> APIs.</li>
+            <li>Corrected light-service, PSI listener, and localized settings-page registrations.</li>
+            <li>Replaced cached strong <code>PsiMethod</code> references with smart pointers.</li>
+            <li>Bound delayed refresh tasks to the project coroutine scope and preserved IDE cancellation.</li>
+        </ul>
         <h3>1.0.3</h3>
         <ul>
             <li>New tool window on the right side: browse all Controller endpoints and all Feign / HttpExchange endpoints in two tabs.</li>
@@ -68,7 +77,7 @@
         <h3>1.0.1</h3>
         <ul>
             <li>Fix a PSI stale-reference / leak risk caused by <code>LineMarkerInfo</code> strongly holding <code>PsiMethod</code>; the source method is now re-resolved from the latest anchor on click.</li>
-            <li>Run the fallback project-wide scan inside a cancelable background progress instead of on the EDT, preventing UI freezes on first click.</li>
+            <li>Run the fallback project-wide scan inside a cancelable background task instead of on the EDT, preventing UI freezes on first click.</li>
             <li>Guard <code>BilateralMappingCacheService</code> against invalid <code>PsiMethod</code> inputs to avoid <code>PsiInvalidElementAccessException</code>.</li>
             <li>Always render the gutter icon when a method is applicable, so freshly edited methods can immediately trigger the fallback scan.</li>
             <li>Show a balloon notification when no matching endpoint is found, so clicks no longer fail silently.</li>
@@ -117,17 +126,8 @@
                 parentId="tools"
                 id="com.lizhuolun.feignhelper.settings.FeignHelperConfigurable"
                 instance="com.lizhuolun.feignhelper.settings.FeignHelperConfigurable"
-                displayName="FeignHelper"/>
-
-        <!-- 应用级 / 项目级 Service -->
-        <applicationService
-                serviceImplementation="com.lizhuolun.feignhelper.settings.FeignHelperSettings"/>
-        <projectService
-                serviceImplementation="com.lizhuolun.feignhelper.cache.PsiClassCacheService"/>
-        <projectService
-                serviceImplementation="com.lizhuolun.feignhelper.cache.BilateralMappingCacheService"/>
-        <projectService
-                serviceImplementation="com.lizhuolun.feignhelper.ui.EndpointToolWindowService"/>
+                bundle="messages.FeignHelperBundle"
+                key="settings.title"/>
 
         <!-- FeignHelper 工具窗口：展示 Controller / Feign 端点列表 -->
         <toolWindow
@@ -142,7 +142,7 @@
                 implementation="com.lizhuolun.feignhelper.listener.FeignHelperStartupActivity"/>
 
         <!-- PSI 变更监听器 -->
-        <psiTreeChangeListener
+        <psi.treeChangeListener
                 implementation="com.lizhuolun.feignhelper.listener.FeignHelperPsiListener"/>
 
         <!-- 复制 URL 时的通知组 -->

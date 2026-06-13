@@ -1,6 +1,8 @@
 package com.lizhuolun.feignhelper.core
 
 import com.intellij.psi.PsiMethod
+import com.intellij.psi.SmartPointerManager
+import com.intellij.psi.SmartPsiElementPointer
 
 /**
  * HTTP 映射元数据，对应一个 Feign / Controller / HttpExchange 方法。
@@ -11,7 +13,7 @@ import com.intellij.psi.PsiMethod
  *
  * @property url 已经拼接好的完整 URL（不含 host），例如 /api/user/info
  * @property httpMethod HTTP 方法
- * @property method 关联的 PsiMethod，仅用于跳转锚点；访问其属性时调用方必须自行持有 read action
+ * @property methodPointer 关联方法的智能指针；解析指针时调用方必须自行持有 read action
  * @property kind 来源类型，决定后续匹配的对端
  * @property qualifier 类全限定名 + # + 方法名，用于缓存去重，构造时一次性计算
  * @author lizhuolun
@@ -20,10 +22,17 @@ import com.intellij.psi.PsiMethod
 data class HttpMappingInfo(
     val url: String,
     val httpMethod: HttpMethod,
-    val method: PsiMethod,
+    val methodPointer: SmartPsiElementPointer<PsiMethod>,
     val kind: EndpointKind,
     val qualifier: String,
 ) {
+
+    /**
+     * 解析当前有效的 PsiMethod。
+     *
+     * @return 指针对应的方法；方法已删除或失效时返回 null
+     */
+    fun resolveMethod(): PsiMethod? = methodPointer.element?.takeIf { it.isValid }
 
     /**
      * 判断两个映射是否可以匹配，HTTP 方法兼容 + URL 完全一致。
@@ -67,7 +76,7 @@ data class HttpMappingInfo(
          * @param httpMethod HTTP 方法
          * @param method 关联方法
          * @param kind 端点类别
-         * @return 不再依赖 PSI 即可序列化使用的 HttpMappingInfo
+         * @return 使用智能指针持有方法引用的 HttpMappingInfo
          */
         fun create(
             url: String,
@@ -77,7 +86,8 @@ data class HttpMappingInfo(
         ): HttpMappingInfo = HttpMappingInfo(
             url = url,
             httpMethod = httpMethod,
-            method = method,
+            methodPointer = SmartPointerManager.getInstance(method.project)
+                .createSmartPsiElementPointer(method),
             kind = kind,
             qualifier = qualifierOf(method),
         )

@@ -30,37 +30,22 @@ data class EndpointTreeItem(
     companion object {
 
         /**
-         * 从 HttpMappingInfo 创建展示项。
+         * 从 HttpMappingInfo 与已解析方法创建展示项。
+         *
+         * 必须在 read action 内调用，因为会访问 PSI。
          *
          * @param info 端点映射
+         * @param method 已从智能指针解析出的有效方法
          * @return 展示项
          */
-        fun from(info: HttpMappingInfo): EndpointTreeItem = EndpointTreeItem(
-            url = info.url,
-            httpMethod = info.httpMethod,
-            methodName = info.method.name,
-            className = info.method.containingClass?.qualifiedName ?: "Unknown",
-            kind = info.kind,
-            pointer = null,
-        )
-
-        /**
-         * 从 HttpMappingInfo 创建展示项，并同时构造 SmartPsiElementPointer。
-         *
-         * 必须在 read action 内调用，因为会访问 PSI 并创建 pointer。
-         *
-         * @param info 端点映射
-         * @param pointer 已构造好的智能指针
-         * @return 展示项
-         */
-        fun from(info: HttpMappingInfo, pointer: SmartPsiElementPointer<PsiMethod>): EndpointTreeItem =
+        fun from(info: HttpMappingInfo, method: PsiMethod): EndpointTreeItem =
             EndpointTreeItem(
                 url = info.url,
                 httpMethod = info.httpMethod,
-                methodName = info.method.name,
-                className = info.method.containingClass?.qualifiedName ?: "Unknown",
+                methodName = method.name,
+                className = method.containingClass?.qualifiedName ?: "Unknown",
                 kind = info.kind,
-                pointer = pointer,
+                pointer = info.methodPointer,
             )
     }
 }

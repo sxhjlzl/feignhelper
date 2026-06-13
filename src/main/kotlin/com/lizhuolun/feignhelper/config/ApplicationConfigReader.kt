@@ -1,6 +1,7 @@
 package com.lizhuolun.feignhelper.config
 
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiDirectory
@@ -92,6 +93,8 @@ object ApplicationConfigReader {
                 } else {
                     merged.putAll(parseYaml(file))
                 }
+            } catch (e: ProcessCanceledException) {
+                throw e
             } catch (e: Exception) {
                 LOG.warn("FeignHelper: 解析配置文件失败, file=${file.path}", e)
             }

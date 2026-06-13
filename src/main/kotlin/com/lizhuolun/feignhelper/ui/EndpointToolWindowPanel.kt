@@ -6,6 +6,8 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
@@ -32,6 +34,8 @@ import javax.swing.BorderFactory
  * @date 2026/6/12
  */
 class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointToolWindowPanel>(BorderLayout()) {
+
+    private val log = thisLogger()
 
     private val controllerTree = EndpointTree(project, EndpointKind.CONTROLLER)
     private val feignTree = EndpointTree(project, EndpointKind.FEIGN)
@@ -159,7 +163,10 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
                 true,
                 project,
             )
+        } catch (e: ProcessCanceledException) {
+            throw e
         } catch (e: Exception) {
+            log.warn("FeignHelper: 工具窗口扫描端点失败, project=${project.name}", e)
             emptyList<HttpMappingInfo>() to emptyList<HttpMappingInfo>()
         }
     }

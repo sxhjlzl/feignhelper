@@ -1,5 +1,7 @@
 package com.lizhuolun.feignhelper.cache
 
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.util.Computable
 import com.intellij.psi.PsiJavaFile
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.lizhuolun.feignhelper.scanner.EndpointScanner
@@ -225,7 +227,11 @@ class BilateralMappingCacheServiceTest : BasePlatformTestCase() {
         val targets = cache.findControllerTargets(feignMethod)
 
         assertSize(1, targets)
-        assertEquals("hello", targets.single().method.name)
+        val targetMethod = ApplicationManager.getApplication().runReadAction(Computable {
+            targets.single().resolveMethod()
+        })
+        assertNotNull(targetMethod)
+        assertEquals("hello", targetMethod?.name)
     }
 
     private fun addSpringAnnotations() {

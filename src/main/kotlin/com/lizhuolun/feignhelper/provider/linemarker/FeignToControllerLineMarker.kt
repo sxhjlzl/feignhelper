@@ -31,7 +31,6 @@ class FeignToControllerLineMarker : EndpointNavigationLineMarker() {
     override fun findTargets(project: Project, method: PsiMethod): List<HttpMappingInfo> =
         BilateralMappingCacheService.of(project)
             .findControllerTargets(method)
-            .filter { it.method.isValid }
 
     override fun resolveSelfUrl(project: Project, method: PsiMethod): String? =
         BilateralMappingCacheService.of(project).resolveMapping(method)?.url

@@ -8,7 +8,6 @@ import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.Computable
 import com.intellij.psi.NavigatablePsiElement
 import com.intellij.psi.PsiMethod
-import com.intellij.psi.SmartPointerManager
 import com.intellij.icons.AllIcons
 import com.intellij.ui.DoubleClickListener
 import com.intellij.ui.JBColor
@@ -115,18 +114,16 @@ class EndpointTree(
      * 刷新整棵树。
      *
      * 调用方应确保在 read action 内传入 endpoints，或保证其中的 PSI 属性已可安全访问。
-     * 本方法会在 read action 内一次性提取展示所需字段并创建 SmartPointer，
+     * 本方法会在 read action 内一次性解析智能指针并提取展示所需字段，
      * 后续过滤与渲染不再触碰 PSI。
      *
      * @param endpoints 新的端点列表
      */
     fun refresh(endpoints: List<HttpMappingInfo>) {
-        val smartManager = SmartPointerManager.getInstance(project)
         val items = ApplicationManager.getApplication().runReadAction(Computable {
             endpoints.mapNotNull { info ->
-                if (!info.method.isValid) return@mapNotNull null
-                val pointer = smartManager.createSmartPsiElementPointer(info.method)
-                EndpointTreeItem.from(info, pointer)
+                val method = info.resolveMethod() ?: return@mapNotNull null
+                EndpointTreeItem.from(info, method)
             }
         })
         allItems = items
@@ -272,8 +269,7 @@ class EndpointTree(
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed) return@invokeLater
                 val valid = ApplicationManager.getApplication().runReadAction(Computable {
-                    targets.mapNotNull { it.method }
-                        .filter { it.isValid }
+                    targets.mapNotNull { it.resolveMethod() }
                         .filterIsInstance<NavigatablePsiElement>()
                 })
                 when (valid.size) {

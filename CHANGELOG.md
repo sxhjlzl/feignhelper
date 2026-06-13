@@ -6,6 +6,21 @@
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-06-13
+
+### Fixed 修复
+
+- 修复端点映射缓存长期强持有 `PsiMethod` 的问题，改用 `SmartPsiElementPointer`，避免源码编辑或删除后残留失效 PSI 引用
+- 修复配置解析、索引扫描与工具窗口刷新吞掉 `ProcessCanceledException` 的问题，确保 IDE 取消操作可以正常传播
+- 修复 `plugin.xml` 中轻量 `@Service` 的重复注册、PSI 监听器扩展点名称以及设置页标题国际化声明
+- 修复 Kotlin 兼容模式为 `ToolWindowFactory` 生成默认方法桥接，导致 2026.2 EAP 报告 deprecated / experimental API 用法的问题
+
+### Changed 改进
+
+- 延迟刷新任务改用项目 Service 注入的 `CoroutineScope`，确保任务随项目生命周期自动取消
+- 消息总线连接显式绑定项目生命周期
+- 通过 IntelliJ Plugin Verifier 验证 IDEA 2024.3、2025.1、2025.2、2025.3、2026.1 与 2026.2 EAP
+
 ## [1.0.3] - 2026-06-12
 
 ### Added 新增
@@ -67,7 +82,8 @@
 - 声明 Kotlin K1 / K2 插件模式兼容
 - 为路径、占位符、profile 与配置文件识别补充单元测试
 
-[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.0...v1.0.1

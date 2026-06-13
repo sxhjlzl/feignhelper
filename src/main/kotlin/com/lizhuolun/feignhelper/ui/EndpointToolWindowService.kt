@@ -22,7 +22,7 @@ class EndpointToolWindowService(private val project: Project) {
     private var panel: EndpointToolWindowPanel? = null
 
     init {
-        project.messageBus.connect().subscribe(
+        project.messageBus.connect(project).subscribe(
             CacheChangeListener.TOPIC,
             object : CacheChangeListener {
                 override fun onCacheChanged() {

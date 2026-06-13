@@ -10,12 +10,14 @@ import com.intellij.openapi.actionSystem.ActionGroup
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.markup.GutterIconRenderer
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Computable
 import com.intellij.psi.NavigatablePsiElement
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiMethod
@@ -206,12 +208,10 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
                 notifyNoTargets(project)
                 return
             }
-            val validTargets = targets
-                .asSequence()
-                .map { it.method }
-                .filter { it.isValid }
-                .filterIsInstance<NavigatablePsiElement>()
-                .toList()
+            val validTargets = ApplicationManager.getApplication().runReadAction(Computable {
+                targets.mapNotNull { it.resolveMethod() }
+                    .filterIsInstance<NavigatablePsiElement>()
+            })
             if (validTargets.isEmpty()) {
                 notifyNoTargets(project)
                 return

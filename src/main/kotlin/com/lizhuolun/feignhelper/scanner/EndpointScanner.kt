@@ -2,6 +2,7 @@ package com.lizhuolun.feignhelper.scanner
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
@@ -193,6 +194,8 @@ object EndpointScanner {
             try {
                 val query = AnnotatedElementsSearch.searchPsiClasses(annotationClass, scope)
                 collected.addAll(query.findAll())
+            } catch (e: ProcessCanceledException) {
+                throw e
             } catch (e: Exception) {
                 LOG.warn("FeignHelper: AnnotatedElementsSearch 查询失败, fqn=$fqn", e)
             }

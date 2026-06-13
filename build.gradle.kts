@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -38,6 +39,7 @@ kotlin {
     jvmToolchain(21)
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_21)
+        jvmDefault.set(JvmDefaultMode.NO_COMPATIBILITY)
         freeCompilerArgs.addAll("-Xjsr305=strict", "-Xdebug")
     }
 }

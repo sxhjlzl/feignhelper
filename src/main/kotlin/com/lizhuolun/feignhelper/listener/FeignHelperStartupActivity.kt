@@ -97,7 +97,7 @@ class FeignHelperStartupActivity : ProjectActivity {
         val seen = LinkedHashSet<PsiClass>()
         for (info in endpoints) {
             if (filterKind != null && info.kind != filterKind) continue
-            val cls = info.method.containingClass ?: continue
+            val cls = info.resolveMethod()?.containingClass ?: continue
             seen += cls
         }
         return seen.toList()

@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-06-13
+
+### Fixed
+
+- Replaced strong `PsiMethod` references in the endpoint mapping cache with `SmartPsiElementPointer`, preventing stale PSI retention after source edits or deletion
+- Preserved `ProcessCanceledException` in configuration parsing, indexed scans, and tool-window refreshes so IDE cancellation propagates correctly
+- Corrected duplicate light-service registrations, the PSI listener extension point name, and localization metadata for the settings page in `plugin.xml`
+- Disabled Kotlin compatibility bridges that generated calls to deprecated and experimental `ToolWindowFactory` APIs on IntelliJ IDEA 2026.2 EAP
+
+### Changed
+
+- Delayed refresh tasks now use the project service's injected `CoroutineScope` and are cancelled with the project lifecycle
+- The message-bus connection is explicitly bound to the project lifecycle
+- Verified compatibility with IntelliJ IDEA 2024.3, 2025.1, 2025.2, 2025.3, 2026.1, and 2026.2 EAP
+
 ## [1.0.3] - 2026-06-12
 
 ### Added
@@ -34,7 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Fixed a PSI leak / stale-element issue caused by `LineMarkerInfo` strongly holding `PsiMethod`; the source method is now re-resolved from the latest anchor on click
-- Fixed UI freezes caused by running the fallback project-wide scan on the EDT; the lookup now runs in a cancelable background progress
+- Fixed UI freezes caused by running the fallback project-wide scan on the EDT; the lookup now runs in a cancelable background task
 - Fixed `PsiInvalidElementAccessException` when `BilateralMappingCacheService.removeByMethod` / `resolveMapping` was called with an invalid `PsiMethod`
 - Fixed a non-atomic PSI read in `computeFreshClientMapping` by merging the two read actions into a single atomic block
 
@@ -69,7 +84,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Declares compatibility with Kotlin K1 and K2 plugin modes
 - Adds unit tests for paths, placeholders, profiles, and configuration file recognition
 
-[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/sxhjlzl/feignhelper/compare/v1.0.0...v1.0.1

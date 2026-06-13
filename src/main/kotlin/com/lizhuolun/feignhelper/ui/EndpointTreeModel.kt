@@ -29,7 +29,7 @@ class EndpointTreeModel : DefaultTreeModel(EndpointNode.group("Root")) {
             .groupBy { it.className }
 
         for ((className, list) in byClass) {
-            val group = EndpointNode.group(className)
+            val group = EndpointNode.group("$className (${list.size})")
             for (item in list) {
                 group.add(EndpointNode.from(item))
             }

@@ -10,9 +10,12 @@ import com.intellij.psi.NavigatablePsiElement
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.SmartPointerManager
 import com.intellij.ui.DoubleClickListener
+import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.treeStructure.Tree
+import java.awt.Dimension
+import javax.swing.BorderFactory
 import com.lizhuolun.feignhelper.FeignHelperBundle
 import com.lizhuolun.feignhelper.cache.BilateralMappingCacheService
 import com.lizhuolun.feignhelper.core.EndpointKind
@@ -24,6 +27,8 @@ import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
 import javax.swing.JPanel
 import javax.swing.JPopupMenu
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
 
 /**
  * 端点列表树组件，包含过滤输入框与树形展示。
@@ -43,9 +48,16 @@ class EndpointTree(
         isRootVisible = false
         showsRootHandles = true
         emptyText.text = FeignHelperBundle.message("toolwindow.empty.text")
+        cellRenderer = EndpointTreeCellRenderer()
+        rowHeight = 24
     }
     private val filterField = JBTextField().apply {
         emptyText.text = FeignHelperBundle.message("toolwindow.filter.placeholder")
+        preferredSize = Dimension(preferredSize.width, 28)
+        border = BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, JBColor.GRAY.brighter()),
+            BorderFactory.createEmptyBorder(2, 6, 2, 6),
+        )
     }
 
     /**
@@ -53,9 +65,26 @@ class EndpointTree(
      */
     private var allItems: List<EndpointTreeItem> = emptyList()
 
+    /**
+     * 上一次实际应用的过滤文本，避免 caret/focus 变化时重复触发过滤。
+     */
+    private var lastFilterText: String = ""
+
+    /**
+     * 当前过滤后的条目数量。
+     */
+    private var filteredCount: Int = 0
+
+    /**
+     * 数量变化回调，参数为 (总数, 过滤后数量)。
+     */
+    var onCountsChanged: ((total: Int, filtered: Int) -> Unit)? = null
+
     init {
         add(filterField, BorderLayout.NORTH)
-        add(JBScrollPane(tree), BorderLayout.CENTER)
+        add(JBScrollPane(tree).apply {
+            border = BorderFactory.createEmptyBorder()
+        }, BorderLayout.CENTER)
         setupListeners()
     }
 
@@ -82,9 +111,11 @@ class EndpointTree(
     }
 
     private fun setupListeners() {
-        filterField.addCaretListener {
-            applyFilter(filterField.text.trim())
-        }
+        filterField.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent?) = onFilterTextChanged()
+            override fun removeUpdate(e: DocumentEvent?) = onFilterTextChanged()
+            override fun changedUpdate(e: DocumentEvent?) = onFilterTextChanged()
+        })
 
         tree.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {
@@ -105,6 +136,13 @@ class EndpointTree(
         tree.componentPopupMenu = buildPopupMenu()
     }
 
+    private fun onFilterTextChanged() {
+        val text = filterField.text.trim()
+        if (text == lastFilterText) return
+        lastFilterText = text
+        applyFilter(text)
+    }
+
     private fun applyFilter(text: String) {
         val filtered = if (text.isBlank()) {
             allItems
@@ -117,6 +155,8 @@ class EndpointTree(
                     it.className.lowercase().contains(lower)
             }
         }
+        filteredCount = filtered.size
+        onCountsChanged?.invoke(allItems.size, filteredCount)
         treeModel.refresh(filtered)
         expandAll()
     }
@@ -126,6 +166,29 @@ class EndpointTree(
             tree.expandRow(i)
         }
     }
+
+    /**
+     * 收起树中所有类分组节点。
+     */
+    fun collapseAll() {
+        for (i in tree.rowCount - 1 downTo 0) {
+            tree.collapseRow(i)
+        }
+    }
+
+    /**
+     * 获取当前 Tab 下完整的端点总数。
+     *
+     * @return 端点总数
+     */
+    fun getTotalCount(): Int = allItems.size
+
+    /**
+     * 获取当前过滤后显示的端点数量。
+     *
+     * @return 过滤后端点数量
+     */
+    fun getFilteredCount(): Int = filteredCount
 
     private fun navigateSelected() {
         val pointer = (tree.lastSelectedPathComponent as? EndpointNode)?.pointer ?: return
